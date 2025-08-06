@@ -134,7 +134,7 @@ def plot_city_graph(n, m, s_lengths, b_lengths):
     plt.show()
 
 
-def visualize_paths_on_graph(G, pos, path_lookup, n, m, s_lengths, b_lengths, max_paths_to_show=20):
+def visualize_paths_on_graph(G, pos, path_lookup, n, m, s_lengths, b_lengths, max_paths_to_show=None, title=None):
     """Visualize paths overlaid on the city graph with color=time, thickness=frequency"""
     
     fig, ax = plt.subplots(figsize=(15, 10))
@@ -148,7 +148,10 @@ def visualize_paths_on_graph(G, pos, path_lookup, n, m, s_lengths, b_lengths, ma
     used_paths.sort(key=lambda x: x[1]['frequency'], reverse=True)
     
     # Limit to top paths for clarity
-    paths_to_show = used_paths[:max_paths_to_show]
+    if max_paths_to_show is not None:
+        paths_to_show = used_paths[:max_paths_to_show]
+    else:
+        paths_to_show = used_paths
     
     if not paths_to_show:
         print("No paths to visualize")
@@ -193,7 +196,7 @@ def visualize_paths_on_graph(G, pos, path_lookup, n, m, s_lengths, b_lengths, ma
                              edge_color=[color], width=thickness, alpha=0.7, ax=ax)
     
     ax.set_aspect('equal')
-    ax.set_title(f"Path Usage Visualization ({n}×{m} grid)\n" +
+    ax.set_title(f"{title} ({n}×{m} grid)\n" +
                 f"Color: Red=slow, Green=fast | Thickness: Usage frequency\n" +
                 f"Showing top {len(paths_to_show)} most frequent paths")
     

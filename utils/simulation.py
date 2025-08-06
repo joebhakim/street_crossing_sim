@@ -4,6 +4,8 @@ Simulation logic for street crossing strategies.
 import random
 import numpy as np
 
+from utils.strategies import Strategies
+
 
 def wait_time_to_green(current_t, offset):
     """Calculate wait time until next green light."""
@@ -61,7 +63,7 @@ def calculate_remaining_moves(current_node, end_node):
     return e_remaining, s_remaining
 
 
-def choose_next_node(G, current_node, strategy, signal_offsets, current_time, end_node=None):
+def choose_next_node(G, current_node, strategy: Strategies, signal_offsets, current_time, end_node=None):
     """Choose next node based on strategy - only east/south moves allowed"""
     valid_moves = get_valid_moves(G, current_node)
     
@@ -96,12 +98,12 @@ def choose_next_node(G, current_node, strategy, signal_offsets, current_time, en
         })
     
     # Apply strategy
-    if strategy == "random":
+    if strategy == Strategies.random:
         chosen = random.choice(move_data)
-    elif strategy == "oracular":
+    elif strategy == Strategies.oracular:
         # Perfect information strategy - choose minimum wait time
         chosen = min(move_data, key=lambda x: x['wait_time'])
-    elif strategy == "signal_observer":
+    elif strategy == Strategies.signal_observer:
         # Realistic strategy: observe current signal states
         green_moves = [m for m in move_data if m['is_green']]
         
@@ -129,11 +131,11 @@ def choose_next_node(G, current_node, strategy, signal_offsets, current_time, en
         else:
             # No green signals - wait for first one to turn green
             chosen = min(move_data, key=lambda x: x['wait_time'])
-    elif strategy == "edge":
+    elif strategy == Strategies.edge:
         # Prefer eastward moves
         east_moves = [m for m in move_data if m['direction'] == 'E']
         chosen = random.choice(east_moves) if east_moves else random.choice(move_data)
-    elif strategy == "alternate":
+    elif strategy == Strategies.alternate:
         # For now, just random choice among available moves
         # TODO: track previous direction for true alternation
         chosen = random.choice(move_data)
@@ -143,7 +145,7 @@ def choose_next_node(G, current_node, strategy, signal_offsets, current_time, en
     return chosen['neighbor'], chosen['direction']
 
 
-def simulate_graph_run(G, start_node, end_node, strategy):
+def simulate_graph_run(G, start_node, end_node, strategy: Strategies):
     """Simulate a pedestrian journey through the actual graph - only east/south moves"""
     current_node = start_node
     current_time = 0.0
@@ -186,7 +188,7 @@ def simulate_graph_run(G, start_node, end_node, strategy):
     }
 
 
-def simulate_graph_many(G, start_node, end_node, strategy, N=100):
+def simulate_graph_many(G, start_node, end_node, strategy: Strategies, N=100):
     """Run many graph simulations"""
     results = []
     for _ in range(N):
@@ -224,17 +226,27 @@ def path_signature(edge_list):
     return tuple(edge_list)
 
 
-def analyze_random_strategy_paths(G, start_node, end_node, N=1000):
-    """Analyze path frequency and performance for random strategy"""
+def analyze_specific_strategy_paths(G, start_node, end_node, strategy: Strategies, N=None):
+    """Analyze path frequency and performance for specific strategy
+    Args:
+        G: NetworkX graph
+        start_node: Tuple of (row, column, dx, dy) representing start node
+        end_node: Tuple of (row, column, dx, dy) representing end node
+        strategy: Strategies enum
+        N: Number of simulations to run
+    Returns:
+        path_lookup: Dictionary mapping path signature to path info
+        all_paths: List of all possible paths
+    """
     print("Enumerating all possible paths...")
     all_paths = enumerate_all_paths(G, start_node, end_node)
     print(f"Found {len(all_paths)} possible paths")
     
     # Create mapping from signature to path info
-    path_lookup = {}
+    specific_path_data = {}
     for i, path in enumerate(all_paths):
         sig = path_signature(path['edges'])
-        path_lookup[sig] = {
+        specific_path_data[sig] = {
             'index': i,
             'nodes': path['nodes'],
             'edges': path['edges'],
@@ -243,18 +255,23 @@ def analyze_random_strategy_paths(G, start_node, end_node, N=1000):
             'frequency': 0
         }
     
-    print(f"Running {N} random strategy simulations...")
+    if N is None:
+        raise ValueError("N must be provided")
+    
+    print(f"Running {N} {strategy.name} strategy simulations...")
     # Run simulations and track path usage
     for _ in range(N):
-        result = simulate_graph_run(G, start_node, end_node, 'random')
+        result = simulate_graph_run(G, start_node, end_node, strategy)
         if result['success']:
             sig = path_signature(result['edge_signatures'])
-            if sig in path_lookup:
-                path_lookup[sig]['times'].append(result['time'])
-                path_lookup[sig]['frequency'] += 1
+            if sig in specific_path_data:
+                specific_path_data[sig]['times'].append(result['time'])
+                specific_path_data[sig]['frequency'] += 1
+        else:
+            print(f"Path {result['edge_signatures']} failed to reach end node")
     
     # Calculate statistics
-    for sig, path_info in path_lookup.items():
+    for sig, path_info in specific_path_data.items():
         if path_info['times']:
             path_info['mean_time'] = np.mean(path_info['times'])
             path_info['std_time'] = np.std(path_info['times'])
@@ -262,72 +279,7 @@ def analyze_random_strategy_paths(G, start_node, end_node, N=1000):
             path_info['mean_time'] = float('inf')
             path_info['std_time'] = 0
     
-    return path_lookup, all_paths
+    return specific_path_data, all_paths
 
 
-# Legacy simulation functions (simplified grid-based)
-def choose_direction(strategy, e_left, s_left, w_e, w_s, prev_dir, step_idx):
-    """Legacy function for simple grid simulation."""
-    if e_left == 0:
-        return "S"
-    if s_left == 0:
-        return "E"
-    if strategy == "oracular":
-        if w_e < w_s - 1e-9:
-            return "E"
-        if w_s < w_e - 1e-9:
-            return "S"
-        return "E" if e_left > s_left else "S"
-    if strategy == "signal_observer":
-        # In legacy sim, approximate signal_observer as checking if signals are green (wait_time == 0)
-        green_e = (w_e == 0)
-        green_s = (w_s == 0)
-        
-        if green_e and not green_s:
-            return "E"
-        elif green_s and not green_e:
-            return "S"
-        elif green_e and green_s:
-            # Both green - use balancing heuristic
-            return "E" if e_left > s_left else "S"
-        else:
-            # Neither green - wait for first to turn green (like oracular)
-            if w_e < w_s - 1e-9:
-                return "E"
-            elif w_s < w_e - 1e-9:
-                return "S"
-            else:
-                return "E" if e_left > s_left else "S"
-    if strategy == "random":
-        return random.choice(["E", "S"])
-    if strategy == "edge":
-        return "E"
-    if strategy == "alternate":
-        if prev_dir is None:
-            return "E"
-        if prev_dir == "E" and s_left > 0:
-            return "S"
-        if prev_dir == "S" and e_left > 0:
-            return "E"
-        return "E" if e_left > 0 else "S"
-    raise ValueError
-
-
-def simulate_run(n, m, strategy):
-    """Legacy simple simulation function."""
-    t, e_left, s_left, prev_dir, step_idx = 0.0, n, m, None, 0
-    while e_left + s_left:
-        offset_e, offset_s = random.random()*2, random.random()*2
-        w_e, w_s = wait_time_to_green(t, offset_e), wait_time_to_green(t, offset_s)
-        d = choose_direction(strategy, e_left, s_left, w_e, w_s, prev_dir, step_idx)
-        wait = w_e if d=="E" else w_s
-        t += wait + 1
-        if d=="E": e_left -= 1
-        else: s_left -= 1
-        prev_dir, step_idx = d, step_idx + 1
-    return t
-
-
-def simulate_many(n, m, strategy, N=5000):
-    """Legacy function to run many simple simulations."""
-    return [simulate_run(n, m, strategy) for _ in range(N)] 
+ 

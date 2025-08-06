@@ -7,30 +7,44 @@ import pandas as pd
 import numpy as np
 
 
-def plot_strategy_comparison_swarm(results, n, m, Nsim, sample_size=200):
-    """Create swarm plot comparing strategies with sampled data for performance."""
+def plot_strategy_comparison_swarm(strategy_results, n, m, title="Strategy Performance Comparison"):
+    """Create swarm plot comparing strategy performance."""
+    if not strategy_results:
+        print("No strategy results to plot")
+        return
+    
     fig, ax = plt.subplots(figsize=(10, 6))
     
-    # Prepare data for seaborn - sample from each strategy for faster plotting
+    # Prepare data for seaborn
     plot_data = []
+    sample_size = 200  # Sample size per strategy for faster plotting
     
-    for strategy, times in results.items():
-        # Sample randomly from each strategy
-        sampled_times = np.random.choice(times, size=min(sample_size, len(times)), replace=False)
-        for time in sampled_times:
-            plot_data.append({'Strategy': strategy, 'Travel Time': time})
+    for strategy, stats in strategy_results.items():
+        # Generate sample data points from normal distribution based on mean/std
+        if 'times' in stats:
+            # Use actual time data if available
+            times = stats['times']
+            sampled_times = np.random.choice(times, size=min(sample_size, len(times)), replace=False)
+        else:
+            # Generate from normal distribution using mean/std
+            sampled_times = np.random.normal(stats['mean'], stats['std'], sample_size)
+        
+        for time_val in sampled_times:
+            plot_data.append({'Strategy': strategy, 'Travel Time': time_val})
+    
+    if not plot_data:
+        print("No plot data generated")
+        return
+        
     df = pd.DataFrame(plot_data)
-
-    print('plotting swarmplot of df', df.shape)
     
     # Create swarm plot
     sns.swarmplot(data=df, x='Strategy', y='Travel Time', ax=ax, size=3)
     
-    # Add mean and std lines
-    for i, strategy in enumerate(results.keys()):
-        data = results[strategy]
-        mean_val = np.mean(data)
-        std_val = np.std(data)
+    # Add mean lines and statistics
+    for i, (strategy, stats) in enumerate(strategy_results.items()):
+        mean_val = stats['mean']
+        std_val = stats['std']
         
         # Plot mean line
         ax.hlines(mean_val, i-0.4, i+0.4, colors='red', linewidth=2, alpha=0.8)
@@ -41,11 +55,11 @@ def plot_strategy_comparison_swarm(results, n, m, Nsim, sample_size=200):
                 bbox=dict(boxstyle='round,pad=0.3', facecolor='white', alpha=0.8))
     
     ax.set_ylabel("Travel time (s)")
-    ax.set_title(f"Travel time distribution on {n}×{m} grid ({Nsim} runs per strategy)")
+    ax.set_title(f"{title} ({n}×{m} grid)")
     ax.grid(True, alpha=0.3)
     
     plt.tight_layout()
-    plt.savefig("travel_time_swarmplot.png", dpi=300)
+    plt.savefig("strategy_comparison_swarmplot.png", dpi=300)
     plt.show()
 
 
