@@ -37,9 +37,14 @@ def get_valid_moves(G, current_node):
         is_east = (c2 > c1) or (c2 == c1 and dx2 > dx1)
         is_south = (r2 > r1) or (r2 == r1 and dy2 > dy1)
         
-        if is_east or is_south:
-            direction = "E" if is_east else "S"
+        if is_east and is_south:
+            # Diagonal move within intersection - randomly classify as E or S to avoid bias
+            direction = random.choice(["E", "S"])
             valid_neighbors.append((neighbor, direction))
+        elif is_east:
+            valid_neighbors.append((neighbor, "E"))
+        elif is_south:
+            valid_neighbors.append((neighbor, "S"))
     
     return valid_neighbors
 
@@ -243,10 +248,10 @@ def analyze_specific_strategy_paths(G, start_node, end_node, strategy: Strategie
     print(f"Found {len(all_paths)} possible paths")
     
     # Create mapping from signature to path info
-    specific_path_data = {}
+    traversed_path_data = {}
     for i, path in enumerate(all_paths):
         sig = path_signature(path['edges'])
-        specific_path_data[sig] = {
+        traversed_path_data[sig] = {
             'index': i,
             'nodes': path['nodes'],
             'edges': path['edges'],
@@ -264,14 +269,16 @@ def analyze_specific_strategy_paths(G, start_node, end_node, strategy: Strategie
         result = simulate_graph_run(G, start_node, end_node, strategy)
         if result['success']:
             sig = path_signature(result['edge_signatures'])
-            if sig in specific_path_data:
-                specific_path_data[sig]['times'].append(result['time'])
-                specific_path_data[sig]['frequency'] += 1
+            if sig in traversed_path_data:
+                traversed_path_data[sig]['times'].append(result['time'])
+                traversed_path_data[sig]['frequency'] += 1
         else:
             print(f"Path {result['edge_signatures']} failed to reach end node")
+
+    print(f"Traversed {len(traversed_path_data)} paths")
     
     # Calculate statistics
-    for sig, path_info in specific_path_data.items():
+    for sig, path_info in traversed_path_data.items():
         if path_info['times']:
             path_info['mean_time'] = np.mean(path_info['times'])
             path_info['std_time'] = np.std(path_info['times'])
@@ -279,7 +286,7 @@ def analyze_specific_strategy_paths(G, start_node, end_node, strategy: Strategie
             path_info['mean_time'] = float('inf')
             path_info['std_time'] = 0
     
-    return specific_path_data, all_paths
+    return traversed_path_data, all_paths
 
 
  

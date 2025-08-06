@@ -1,6 +1,7 @@
 """
 Graph building and visualization utilities for street crossing simulation.
 """
+import random
 import matplotlib.pyplot as plt
 import networkx as nx
 from matplotlib.lines import Line2D
@@ -134,15 +135,34 @@ def plot_city_graph(n, m, s_lengths, b_lengths):
     plt.show()
 
 
-def visualize_paths_on_graph(G, pos, path_lookup, n, m, s_lengths, b_lengths, max_paths_to_show=None, title=None):
+def visualize_paths_on_graph(G, pos, path_lookup, n, m, s_lengths, b_lengths, max_paths_to_show=None, strategy=None):
     """Visualize paths overlaid on the city graph with color=time, thickness=frequency"""
     
     fig, ax = plt.subplots(figsize=(15, 10))
+    
+    # Calculate node visit frequencies from path data
+    node_visits = {}
+    for node in G.nodes():
+        node_visits[node] = 0
+    
+    for path_sig, path_info in path_lookup.items():
+        if path_info['frequency'] > 0:
+            for node in path_info['nodes']:
+                node_visits[node] += path_info['frequency']
     
     # Draw base graph structure (nodes and edges in light gray)
     nx.draw_networkx_nodes(G, pos=pos, node_size=60, node_color='lightgray', ax=ax, alpha=0.5)
     nx.draw_networkx_edges(G, pos=pos, edge_color='lightgray', width=0.5, alpha=0.3, ax=ax)
     
+    # Add node visit frequency labels
+    node_labels = {}
+    for node in G.nodes():
+        visits = node_visits.get(node, 0)
+        if visits > 0:  # Only label nodes that were visited
+            node_labels[node] = str(visits)
+    
+    nx.draw_networkx_labels(G, pos, labels=node_labels, font_size=8, font_color='blue', ax=ax)
+
     # Get used paths sorted by frequency
     used_paths = [(sig, info) for sig, info in path_lookup.items() if info['frequency'] > 0]
     used_paths.sort(key=lambda x: x[1]['frequency'], reverse=True)
@@ -196,7 +216,7 @@ def visualize_paths_on_graph(G, pos, path_lookup, n, m, s_lengths, b_lengths, ma
                              edge_color=[color], width=thickness, alpha=0.7, ax=ax)
     
     ax.set_aspect('equal')
-    ax.set_title(f"{title} ({n}×{m} grid)\n" +
+    ax.set_title(f"Path visualization with strategy {strategy.name} ({n}×{m} grid)\n" +
                 f"Color: Red=slow, Green=fast | Thickness: Usage frequency\n" +
                 f"Showing top {len(paths_to_show)} most frequent paths")
     
@@ -210,7 +230,7 @@ def visualize_paths_on_graph(G, pos, path_lookup, n, m, s_lengths, b_lengths, ma
     ax.legend(handles=legend_elements, loc='upper right', bbox_to_anchor=(1, 1))
     
     plt.tight_layout()
-    plt.savefig("path_visualization_on_graph.png", dpi=300, bbox_inches='tight')
+    plt.savefig(f"path_visualization_on_graph_strategy_{strategy.name}.png", dpi=300, bbox_inches='tight')
     plt.show()
     
     # Print top paths info

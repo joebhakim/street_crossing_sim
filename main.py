@@ -13,7 +13,7 @@ from utils.strategies import Strategies
 def main():
     """Run the complete street crossing simulation analysis."""
     # Use smaller grid for manageable path enumeration
-    n, m, Nsim = 3, 4, 5000  # Smaller for path analysis
+    n, m, Nsim = 3, 5, 50000  # Smaller for path analysis
     
     s_lengths = {'vertical': 0.5, 'horizontal': 1.0}
     b_lengths = {'vertical': 4.0, 'horizontal': 3.0}
@@ -39,14 +39,15 @@ def main():
     print("PATH FREQUENCY ANALYSIS")
     print("=" * 50)
     
-    specific_path_data_random, all_paths_analyzed_random = analyze_specific_strategy_paths(G, start_node, end_node, Strategies.random, Nsim)
-    
-    # 3. Create path overlay visualization
-    print("\nGenerating path overlay visualization...")
-    visualize_paths_on_graph(G, pos, specific_path_data_random, n, m, s_lengths, b_lengths, max_paths_to_show=1500, title=f"Strategy: {Strategies.random.name} path overlay")
-    
-    # 4. Print detailed statistics
-    print_detailed_statistics(specific_path_data_random, all_paths_analyzed_random)
+
+    traversed_path_data_per_strategy = {}
+    all_paths_analyzed_per_strategy = {}
+    for strategy in Strategies:
+        traversed_path_data, all_paths_analyzed = analyze_specific_strategy_paths(G, start_node, end_node, strategy, Nsim)
+        traversed_path_data_per_strategy[strategy] = traversed_path_data
+        all_paths_analyzed_per_strategy[strategy] = all_paths_analyzed
+        visualize_paths_on_graph(G, pos, traversed_path_data, n, m, s_lengths, b_lengths, max_paths_to_show=None, strategy=strategy)
+        print_detailed_statistics(traversed_path_data, all_paths_analyzed)
     
     # 5. Strategy comparison with swarm plot
     strategies = [Strategies.random, Strategies.oracular, Strategies.signal_observer, Strategies.edge]
