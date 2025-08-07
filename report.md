@@ -2,6 +2,8 @@
 
 ## Executive Summary
 
+The following was belched out without care or love by an AI. Read it if you dare. (Actually we went back and forth on this, but I find these sorts of disclaimers to be important for the safeguarding of the future.)
+
 This report analyzes pedestrian navigation strategies in a Manhattan-grid urban environment with traffic signals. We implemented a graph-based simulation modeling 2×2 intersections connected by street crossings ('s' edges) and block connections ('b' edges), comparing four navigation strategies through comprehensive path analysis and Monte Carlo simulation.
 
 ![City Graph Structure](city_graph.png)
