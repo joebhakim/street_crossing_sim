@@ -3,6 +3,7 @@ Graph building and visualization utilities for street crossing simulation.
 """
 import random
 import matplotlib.pyplot as plt
+import matplotlib.animation as animation
 import networkx as nx
 from matplotlib.lines import Line2D
 
@@ -239,4 +240,334 @@ def visualize_paths_on_graph(G, pos, path_lookup, n, m, s_lengths, b_lengths, ma
     for i, (sig, info) in enumerate(paths_to_show[:10]):
         print(f"{i+1:2d}. Freq:{info['frequency']:3d} Time:{info['mean_time']:5.1f}s Edges:{info['edge_count']:2d}")
     
-    return paths_to_show 
+    return paths_to_show
+
+
+def animate_traffic_lights(n, m, s_lengths, b_lengths, duration=10.0, fps=10):
+    """
+    Create an animated visualization of traffic light changes on the city graph.
+    
+    Parameters
+    ----------
+    n, m : int
+        Grid dimensions (big blocks)
+    s_lengths, b_lengths : dict
+        Edge lengths for street crossings and block connections
+    duration : float
+        Animation duration in seconds
+    fps : int
+        Frames per second for the animation
+        
+    Returns
+    -------
+    None
+        Saves animated GIF to 'traffic_lights_animation.gif'
+    """
+    # Build the graph
+    G, pos = build_city_graph(n, m, s_lengths, b_lengths)
+    
+    # Generate random signal offsets for each s-edge
+    signal_offsets = {}
+    for u, v, data in G.edges(data=True):
+        if data['edge_type'] == 's':
+            # Create unique key for this edge
+            edge_key = (data['edge_type'], data['orientation'])
+            if (u, v) not in signal_offsets:
+                signal_offsets[(u, v)] = random.random() * 2
+    
+    # Separate edges by type
+    s_edges = [(u, v) for u, v, d in G.edges(data=True) if d['edge_type'] == 's']
+    b_edges = [(u, v) for u, v, d in G.edges(data=True) if d['edge_type'] == 'b']
+    
+    # Create figure and axis
+    fig, ax = plt.subplots(figsize=(12, 8))
+    ax.set_aspect('equal')
+    
+    # Time parameters
+    dt = 1.0 / fps
+    frames = int(duration * fps)
+    
+    def is_signal_green(current_t, offset):
+        """Check if signal is currently showing green/walk."""
+        phase = (current_t + offset) % 2
+        return phase < 1  # Green for first half of 2-second cycle
+    
+    def animate_frame(frame):
+        """Animation function called for each frame."""
+        ax.clear()
+        current_time = frame * dt
+        
+        # Draw nodes
+        nx.draw_networkx_nodes(G, pos=pos, node_size=80, node_color='black', ax=ax)
+        
+        # Draw b-edges (no signals, always black)
+        nx.draw_networkx_edges(G, pos=pos, edgelist=b_edges, edge_color='black', 
+                              width=2, alpha=0.7, style='solid', ax=ax)
+        
+        # Draw s-edges with colors based on signal state
+        green_edges = []
+        red_edges = []
+        
+        for u, v in s_edges:
+            offset = signal_offsets[(u, v)]
+            if is_signal_green(current_time, offset):
+                green_edges.append((u, v))
+            else:
+                red_edges.append((u, v))
+        
+        # Draw green and red s-edges
+        if green_edges:
+            nx.draw_networkx_edges(G, pos=pos, edgelist=green_edges, edge_color='green', 
+                                  width=3, alpha=0.8, style='dashed', ax=ax)
+        if red_edges:
+            nx.draw_networkx_edges(G, pos=pos, edgelist=red_edges, edge_color='red', 
+                                  width=3, alpha=0.8, style='dashed', ax=ax)
+        
+        # Set title with current time
+        ax.set_title(f"Traffic Light Animation ({n}×{m} grid) - Time: {current_time:.1f}s\n" +
+                    f"Green = Walk Signal | Red = Don't Walk Signal", fontsize=12)
+        
+        # Add legend
+        legend_elements = [
+            Line2D([0], [0], color='green', lw=3, linestyle='dashed', label='Green signals (Walk)'),
+            Line2D([0], [0], color='red', lw=3, linestyle='dashed', label='Red signals (Don\'t Walk)'),
+            Line2D([0], [0], color='black', lw=2, linestyle='solid', label='Block connections (no signals)')
+        ]
+        ax.legend(handles=legend_elements, loc='upper right')
+        
+        ax.set_aspect('equal')
+    
+    # Create and run animation
+    print(f"Creating traffic light animation ({duration}s at {fps}fps)...")
+    anim = animation.FuncAnimation(fig, animate_frame, frames=frames, interval=1000/fps, repeat=True)
+    
+    # Save as GIF
+    print("Saving animation as 'traffic_lights_animation.gif'...")
+    anim.save('traffic_lights_animation.gif', writer='pillow', fps=fps, dpi=150)
+    print("Animation saved successfully!")
+    
+    plt.show()
+    return anim
+
+
+def animate_agent_strategy(n, m, s_lengths, b_lengths, strategy, duration_buffer=2.0, fps=60):
+    """
+    Create an animated visualization of an agent navigating using a specific strategy.
+    
+    Parameters
+    ----------
+    n, m : int
+        Grid dimensions (big blocks)
+    s_lengths, b_lengths : dict
+        Edge lengths for street crossings and block connections
+    strategy : Strategies
+        The pathfinding strategy to use
+    duration_buffer : float
+        Extra time to show at end of animation
+    fps : int
+        Frames per second for the animation
+        
+    Returns
+    -------
+    anim : matplotlib.animation.FuncAnimation
+        The animation object
+    """
+    from utils.simulation import simulate_graph_run, wait_time_to_green, is_signal_green
+    import numpy as np
+    
+    # Build the graph
+    G, pos = build_city_graph(n, m, s_lengths, b_lengths)
+    
+    # Define start and end points
+    start_node = (0, 0, 0, 0)
+    end_node = (n-1, m-1, 1, 1)
+    
+    # Run simulation to get path data
+    print(f"Running simulation for strategy: {strategy.name}")
+    result = simulate_graph_run(G, start_node, end_node, strategy)
+    
+    if not result['success']:
+        print(f"Simulation failed for strategy {strategy.name}")
+        return None
+    
+    path_nodes = result['path_nodes']
+    total_time = result['time']
+    
+    print(f"Journey time: {total_time:.1f}s, Path length: {len(path_nodes)} nodes")
+    
+    # Generate same signal offsets as used in simulation
+    signal_offsets = {}
+    random.seed(42)  # For reproducible animations
+    for u, v, data in G.edges(data=True):
+        if data['edge_type'] == 's':
+            if (u, v) not in signal_offsets:
+                signal_offsets[(u, v)] = random.random() * 2
+    
+    # Separate edges by type
+    s_edges = [(u, v) for u, v, d in G.edges(data=True) if d['edge_type'] == 's']
+    b_edges = [(u, v) for u, v, d in G.edges(data=True) if d['edge_type'] == 'b']
+    
+    # Create detailed timeline for agent movement
+    timeline = []
+    current_time = 0.0
+    
+    for i in range(len(path_nodes) - 1):
+        current_node = path_nodes[i]
+        next_node = path_nodes[i + 1]
+        
+        # Check if this is a signal crossing
+        edge_data = G[current_node][next_node]
+        is_signal_edge = edge_data['edge_type'] == 's'
+        
+        if is_signal_edge:
+            # Calculate wait time for this crossing
+            wait_time = wait_time_to_green(current_time, signal_offsets[(current_node, next_node)])
+        else:
+            wait_time = 0
+            
+        # Add waiting phase
+        if wait_time > 0:
+            timeline.append({
+                'start_time': current_time,
+                'end_time': current_time + wait_time,
+                'phase': 'waiting',
+                'position': pos[current_node],
+                'current_node': current_node,
+                'next_node': next_node
+            })
+            current_time += wait_time
+        
+        # Calculate actual crossing time based on edge length (speed = 1 m/s)
+        edge_length = G[current_node][next_node]['length']
+        crossing_time = edge_length
+        
+        # Add movement phase (actual crossing time)
+        timeline.append({
+            'start_time': current_time,
+            'end_time': current_time + crossing_time,
+            'phase': 'moving',
+            'start_pos': pos[current_node],
+            'end_pos': pos[next_node],
+            'current_node': current_node,
+            'next_node': next_node,
+            'crossing_time': crossing_time
+        })
+        current_time += crossing_time
+    
+    # Add final position
+    timeline.append({
+        'start_time': current_time,
+        'end_time': current_time + duration_buffer,
+        'phase': 'finished',
+        'position': pos[end_node],
+        'current_node': end_node,
+        'next_node': None
+    })
+    
+    # Create figure
+    fig, ax = plt.subplots(figsize=(12, 8))
+    ax.set_aspect('equal')
+    
+    # Animation parameters
+    dt = 1.0 / fps
+    total_duration = current_time + duration_buffer
+    frames = int(total_duration * fps)
+    
+    def animate_frame(frame):
+        """Animation function called for each frame."""
+        ax.clear()
+        current_time = frame * dt
+        
+        # Draw base graph nodes
+        nx.draw_networkx_nodes(G, pos=pos, node_size=80, node_color='black', ax=ax)
+        
+        # Draw b-edges (no signals, always black)
+        nx.draw_networkx_edges(G, pos=pos, edgelist=b_edges, edge_color='black', 
+                              width=2, alpha=0.7, style='solid', ax=ax)
+        
+        # Draw s-edges with traffic light colors
+        green_edges = []
+        red_edges = []
+        
+        for u, v in s_edges:
+            offset = signal_offsets[(u, v)]
+            if is_signal_green(current_time, offset):
+                green_edges.append((u, v))
+            else:
+                red_edges.append((u, v))
+        
+        if green_edges:
+            nx.draw_networkx_edges(G, pos=pos, edgelist=green_edges, edge_color='green', 
+                                  width=3, alpha=0.8, style='dashed', ax=ax)
+        if red_edges:
+            nx.draw_networkx_edges(G, pos=pos, edgelist=red_edges, edge_color='red', 
+                                  width=3, alpha=0.8, style='dashed', ax=ax)
+        
+        # Find agent position at current time
+        agent_pos = None
+        current_phase = None
+        
+        for event in timeline:
+            if event['start_time'] <= current_time <= event['end_time']:
+                current_phase = event
+                break
+        
+        if current_phase:
+            if current_phase['phase'] == 'waiting' or current_phase['phase'] == 'finished':
+                # Agent is stationary at a node
+                agent_pos = current_phase['position']
+            elif current_phase['phase'] == 'moving':
+                # Agent is moving between nodes
+                progress = (current_time - current_phase['start_time']) / (current_phase['end_time'] - current_phase['start_time'])
+                progress = max(0, min(1, progress))  # Clamp to [0, 1]
+                
+                start_pos = current_phase['start_pos']
+                end_pos = current_phase['end_pos']
+                agent_pos = (
+                    start_pos[0] + progress * (end_pos[0] - start_pos[0]),
+                    start_pos[1] + progress * (end_pos[1] - start_pos[1])
+                )
+        
+        # Draw agent as purple star
+        if agent_pos:
+            ax.scatter(*agent_pos, marker='*', color='purple', s=200, zorder=10, edgecolor='white', linewidth=1)
+        
+        # Create status text
+        status_text = f"Strategy: {strategy.name}\nTime: {current_time:.1f}s"
+        if current_phase:
+            if current_phase['phase'] == 'waiting':
+                remaining_wait = current_phase['end_time'] - current_time
+                status_text += f"\nWaiting for signal: {remaining_wait:.1f}s"
+            elif current_phase['phase'] == 'moving':
+                crossing_time = current_phase.get('crossing_time', 1.0)
+                remaining_cross = current_phase['end_time'] - current_time
+                status_text += f"\nCrossing ({crossing_time:.1f}s): {remaining_cross:.1f}s left"
+            elif current_phase['phase'] == 'finished':
+                status_text += f"\nJourney complete!"
+        
+        # Set title and add status
+        ax.set_title(f"Agent Navigation Animation ({n}×{m} grid)\n{status_text}", fontsize=12)
+        
+        # Add legend
+        legend_elements = [
+            Line2D([0], [0], color='green', lw=3, linestyle='dashed', label='Green signals (Walk)'),
+            Line2D([0], [0], color='red', lw=3, linestyle='dashed', label='Red signals (Don\'t Walk)'),
+            Line2D([0], [0], color='black', lw=2, linestyle='solid', label='Block connections'),
+            Line2D([0], [0], marker='*', color='purple', lw=0, markersize=10, label='Agent')
+        ]
+        ax.legend(handles=legend_elements, loc='upper right')
+        
+        ax.set_aspect('equal')
+    
+    # Create animation
+    print(f"Creating agent animation ({total_duration:.1f}s at {fps}fps)...")
+    anim = animation.FuncAnimation(fig, animate_frame, frames=frames, interval=1000/fps, repeat=True)
+    
+    # Save as GIF
+    filename = f'agent_animation_strategy_{strategy.name}.gif'
+    print(f"Saving animation as '{filename}'...")
+    anim.save(filename, writer='pillow', fps=fps, dpi=150)
+    print("Animation saved successfully!")
+    
+    plt.show()
+    return anim
