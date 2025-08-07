@@ -105,10 +105,20 @@ def choose_next_node(G, current_node, strategy: Strategies, signal_offsets, curr
     # Apply strategy
     if strategy == Strategies.random:
         chosen = random.choice(move_data)
-    elif strategy == Strategies.oracular:
+    elif strategy == Strategies.oracular_random:
         # Perfect information strategy - choose minimum wait time
-        chosen = min(move_data, key=lambda x: x['wait_time'])
-    elif strategy == Strategies.signal_observer:
+        
+        # if both are green, both wait times are 0, so we need to choose randomly
+        green_moves = [m for m in move_data if m['is_green']]
+        if len(green_moves) > 1:
+            chosen = random.choice(green_moves)
+        elif len(green_moves) == 1:
+            chosen = green_moves[0]
+        elif len(green_moves) == 0:
+            chosen = min(move_data, key=lambda x: x['wait_time'])
+        else:
+            raise ValueError("HUHG?!")
+    elif strategy == Strategies.option_maximizer:
         # Realistic strategy: observe current signal states
         green_moves = [m for m in move_data if m['is_green']]
         

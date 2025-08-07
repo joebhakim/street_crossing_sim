@@ -10,15 +10,15 @@ This report analyzes pedestrian navigation strategies in a Manhattan-grid urban 
 ## Key Findings
 
 ### Strategy Performance
-- **Signal Observer (Realistic)**: 14.87±0.60s - performs nearly optimally using only observable signal states
-- **Oracular (Perfect Information)**: 14.77±0.58s - baseline with perfect future knowledge
+- **Option maximizer (Realistic)**: 14.87±0.60s - performs nearly optimally using only observable signal states
+- **Oracular random (Perfect Information)**: 14.77±0.58s - baseline with perfect future knowledge
 - **Random**: 15.98±0.94s - serves as control for unbiased exploration
 - **Edge (Always East)**: 15.93±0.86s - deterministic eastward preference
 
-### Critical Discovery: The realistic **Signal Observer** strategy achieves 99.3% of optimal performance (oracular) while using only currently observable information, validating that pedestrians don't need future signal prediction for near-optimal navigation.
+### Critical Discovery: The realistic **Option maximizer** strategy achieves 99.3% of optimal performance (oracular_random) while using only currently observable information, validating that pedestrians don't need future signal prediction for near-optimal navigation.
 
 ![Strategy Performance Comparison](strategy_comparison_swarmplot.png)
-*Figure 2: Performance comparison across navigation strategies. Each dot represents a simulation run, with red lines showing mean performance. Signal Observer achieves near-optimal performance.*
+*Figure 2: Performance comparison across navigation strategies. Each dot represents a simulation run, with red lines showing mean performance. Option maximizer achieves near-optimal performance.*
 
 ## Methodology
 
@@ -32,7 +32,7 @@ This report analyzes pedestrian navigation strategies in a Manhattan-grid urban 
 
 ### Strategy Implementations
 
-#### Signal Observer (Realistic Strategy)
+#### Option maximizer (Realistic Strategy)
 1. **Signal State Assessment**: Observe current red/green state of all available crossing signals
 2. **Decision Logic**:
    - If one signal green, others red → Cross immediately
@@ -41,7 +41,7 @@ This report analyzes pedestrian navigation strategies in a Manhattan-grid urban 
 3. **Key Innovation**: Achieves near-optimal performance using only observable information
 
 #### Other Strategies
-- **Oracular**: Perfect future signal timing knowledge, chooses minimum wait time
+- **Oracular random**: Perfect future signal timing knowledge, chooses minimum wait time
 - **Random**: Uniform random selection among valid moves
 - **Edge**: Systematic preference for eastward movement when possible
 
@@ -57,22 +57,22 @@ This report analyzes pedestrian navigation strategies in a Manhattan-grid urban 
 | Strategy | Paths Used | Utilization | Most Frequent Path |
 |----------|------------|-------------|-------------------|
 | Random | 2002/2002 | 100.0% | Uniform exploration |
-| Oracular | ~1400/2002 | ~70.0% | **Dense, focused network** |
-| Signal Observer | ~1350/2002 | ~67.5% | **Dense, focused network** |
+| Oracular random | ~1400/2002 | ~70.0% | **Dense, focused network** |
+| Option maximizer | ~1350/2002 | ~67.5% | **Dense, focused network** |
 | Edge | ~800/2002 | ~40.0% | Concentrated on eastern routes |
 
 ### Key Insight: Strategy Intelligence vs Path Diversity
 
-**Intelligent strategies (Oracular, Signal Observer) exhibit denser path networks**, using 67-70% of available paths compared to Random's 100% but achieving superior performance. This suggests:
+**Intelligent strategies (Oracular random, Option maximizer) exhibit denser path networks**, using 67-70% of available paths compared to Random's 100% but achieving superior performance. This suggests:
 
 ![Path Visualization - Random Strategy](path_visualization_on_graph_strategy_random.png)
 *Figure 3: Random strategy path usage. Blue numbers show node visit frequencies. Line thickness indicates path frequency, colors show performance (red=slow, green=fast).*
 
-![Path Visualization - Signal Observer Strategy](path_visualization_on_graph_strategy_signal_observer.png)
-*Figure 4: Signal Observer strategy path usage. Notice the denser, more focused network of frequently-used paths compared to random exploration.*
+![Path Visualization - Option maximizer Strategy](path_visualization_on_graph_strategy_option_maximizer.png)
+*Figure 4: Option maximizer strategy path usage. Notice the denser, more focused network of frequently-used paths compared to random exploration.*
 
-![Path Visualization - Oracular Strategy](path_visualization_on_graph_strategy_oracular.png)
-*Figure 5: Oracular strategy path usage. Similar density to Signal Observer, confirming convergence on optimal path networks.*
+![Path Visualization - Oracular random Strategy](path_visualization_on_graph_strategy_oracular_random.png)
+*Figure 5: Oracular random strategy path usage. Similar density to Option maximizer, confirming convergence on optimal path networks.*
 
 1. **Focused Exploration**: Smart strategies identify and repeatedly use high-quality route subsets
 2. **Adaptive Efficiency**: Path selection adapts to signal timing rather than exhaustive exploration
@@ -134,7 +134,7 @@ This validates the hypothesis that "middle paths with more routing options are m
 
 ## Conclusion
 
-This analysis demonstrates that **pedestrians can achieve near-optimal navigation performance using only observable signal states**, without requiring complex prediction algorithms. The Signal Observer strategy's 99.3% efficiency relative to perfect information suggests that current traffic signal designs are reasonably well-suited to human decision-making capabilities.
+This analysis demonstrates that **pedestrians can achieve near-optimal navigation performance using only observable signal states**, without requiring complex prediction algorithms. The Option maximizer strategy's 99.3% efficiency relative to perfect information suggests that current traffic signal designs are reasonably well-suited to human decision-making capabilities.
 
 The discovery of natural geometric asymmetries in random walks provides new insights into urban navigation patterns, while the dense path utilization by intelligent strategies reveals how effective routing algorithms naturally converge on optimal network subsets.
 

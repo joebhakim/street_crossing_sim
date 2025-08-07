@@ -50,7 +50,7 @@ def main():
         print_detailed_statistics(traversed_path_data, all_paths_analyzed)
     
     # 5. Strategy comparison with swarm plot
-    strategies = [Strategies.random, Strategies.oracular, Strategies.signal_observer, Strategies.edge]
+    strategies = [Strategies.random, Strategies.oracular_random, Strategies.option_maximizer, Strategies.edge]
     strategy_results = {}
     
     for strategy in strategies:

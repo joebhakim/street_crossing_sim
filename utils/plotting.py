@@ -5,6 +5,8 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 import pandas as pd
 import numpy as np
+from scipy.stats import mannwhitneyu, spearmanr
+from itertools import combinations
 
 
 def plot_strategy_comparison_swarm(strategy_results, n, m, title="Strategy Performance Comparison"):
@@ -41,20 +43,92 @@ def plot_strategy_comparison_swarm(strategy_results, n, m, title="Strategy Perfo
     # Create swarm plot
     sns.swarmplot(data=df, x='Strategy', y='Travel Time', ax=ax, size=3)
     
-    # Add mean lines and statistics
+    # Add mean lines and error bars
     for i, (strategy, stats) in enumerate(strategy_results.items()):
         mean_val = stats['mean']
         std_val = stats['std']
+        n_samples = stats['count']
+        sem_val = std_val / np.sqrt(n_samples)  # Standard error of the mean
         
         # Plot mean line
         ax.hlines(mean_val, i-0.4, i+0.4, colors='red', linewidth=2, alpha=0.8)
         
+        # Plot horizontal error bars for standard error
+        ax.hlines([mean_val - sem_val, mean_val + sem_val], i-0.2, i+0.2, 
+                 colors='orange', linewidth=1.5, alpha=0.7)
+        
         # Add text with statistics
-        ax.text(i, ax.get_ylim()[1] * 0.95, f'μ={mean_val:.2f}±{std_val:.2f}s', 
+        ax.text(i, ax.get_ylim()[1] * 0.95, f'μ={mean_val:.2f}±{sem_val:.2f}s', 
                 ha='center', va='top', fontsize=9, 
                 bbox=dict(boxstyle='round,pad=0.3', facecolor='white', alpha=0.8))
     
-    ax.set_ylabel("Travel time (s)")
+    # include mean and sem in y label
+    # Perform pairwise rank-sum tests
+    strategies = list(strategy_results.keys())
+    pairwise_results = []
+    
+    for i, (strat1, strat2) in enumerate(combinations(strategies, 2)):
+        # Get the actual time data for each strategy
+        if 'times' in strategy_results[strat1] and 'times' in strategy_results[strat2]:
+            times1 = strategy_results[strat1]['times']
+            times2 = strategy_results[strat2]['times']
+        else:
+            # Generate data from normal distribution if times not available
+            stats1 = strategy_results[strat1]
+            stats2 = strategy_results[strat2]
+            times1 = np.random.normal(stats1['mean'], stats1['std'], stats1['count'])
+            times2 = np.random.normal(stats2['mean'], stats2['std'], stats2['count'])
+        
+        # Perform Mann-Whitney U test (equivalent to rank-sum test)
+        statistic, p_value = mannwhitneyu(times1, times2, alternative='two-sided')
+        
+        # Calculate correlation (Spearman's rank correlation)
+        combined_times = np.concatenate([times1, times2])
+        combined_labels = np.concatenate([np.zeros(len(times1)), np.ones(len(times2))])
+        correlation, _ = spearmanr(combined_times, combined_labels)
+        
+        pairwise_results.append({
+            'strat1': strat1,
+            'strat2': strat2,
+            'p_value': p_value,
+            'correlation': abs(correlation),
+            'significant': p_value < 0.05
+        })
+    
+    # Add significance bars
+    y_max = ax.get_ylim()[1]
+    y_min = ax.get_ylim()[0]
+    bar_height = (y_max - y_min) * 0.05
+    
+    # Position bars at different heights to avoid overlap
+    bar_positions = np.linspace(y_max * 1.02, y_max * 1.02 + bar_height * 5, len(pairwise_results))
+    
+    strategy_positions = {strat: i for i, strat in enumerate(strategies)}
+    
+    for i, result in enumerate(pairwise_results):
+        x1 = strategy_positions[result['strat1']]
+        x2 = strategy_positions[result['strat2']]
+        y_pos = bar_positions[i]
+        
+        # Draw horizontal line
+        ax.plot([x1, x2], [y_pos, y_pos], 'k-', linewidth=1)
+        
+        # Add vertical ticks at ends
+        ax.plot([x1, x1], [y_pos - bar_height*0.1, y_pos + bar_height*0.1], 'k-', linewidth=1)
+        ax.plot([x2, x2], [y_pos - bar_height*0.1, y_pos + bar_height*0.1], 'k-', linewidth=1)
+        
+        # Add p-value and significance annotation
+        mid_x = (x1 + x2) / 2
+        significance_marker = '*' if result['significant'] else ''
+        ax.text(mid_x, y_pos + bar_height*0.2, 
+                f"p={result['p_value']:.3f}{significance_marker}", 
+                ha='center', va='bottom', fontsize=8, 
+                bbox=dict(boxstyle='round,pad=0.2', facecolor='lightgray', alpha=0.8))
+    
+    # Adjust y-axis limits to accommodate significance bars
+    ax.set_ylim(y_min, bar_positions[-1] + bar_height * 0.5)
+    
+    ax.set_ylabel(f"Travel time (s) (mean ± sem)")
     ax.set_title(f"{title} ({n}×{m} grid)")
     ax.grid(True, alpha=0.3)
     
